@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Godfather</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --panel-alt: #252525;
+            --text: #e0e0e0;
+            --accent: #d32f2f;
+            --accent-hover: #b71c1c;
+            --success: #4caf50;
+            --warning: #ffb300;
+            --border: #333333;
+            --blue: #1976d2;
+            --blue-hover: #1565c0;
+            
+            --c-krf: #ff5252;
+            --c-ges: #69f0ae;
+            --c-int: #40c4ff;
+        }
+
+        * { box-sizing: border-box; }
+
+        body { 
+            font-size: 14px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--bg); color: var(--text); 
+            margin: 0; padding: 0; height: 100vh; overflow: hidden;
+        }
+
+        /* --- Overlays & Modals --- */
+        #start-screen, #victory-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0a0a0a; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 5000;
+        }
+        #victory-modal-overlay { display: none; background: rgba(0,0,0,0.95); }
+
+        #weekly-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 4000;
+            display: none; justify-content: center; align-items: center;
+            backdrop-filter: blur(4px);
+        }
+
+        #weekly-modal {
+            background: var(--panel); border: 2px solid var(--border);
+            border-radius: 8px; width: 90%; max-width: 650px;
+            max-height: 90vh; overflow-y: auto; padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        .modal-summary { margin-bottom: 20px; font-size: 0.95em; line-height: 1.5; }
+        .modal-section { border-top: 1px solid var(--border); padding-top: 15px; margin-top: 15px; }
+        .arrest-item, .car-item { 
+            display: flex; justify-content: space-between; align-items: center; 
+            margin-bottom: 10px; background: #222; padding: 12px; border-radius: 4px;
+        }
+        .arrest-item { border-left: 4px solid var(--warning); }
+        .car-item { border-left: 4px solid var(--blue); }
+
+        .ascii-art {
+            color: var(--accent); font-family: 'Courier New', Courier, monospace;
+            font-size: 14px; font-weight: bold; white-space: pre;
+            text-shadow: 2px 2px 5px rgba(211, 47, 47, 0.4); margin-bottom: 30px; text-align: center;
+        }
+        .ascii-victory { color: var(--warning); text-shadow: 2px 2px 10px rgba(255, 179, 0, 0.6); font-size: 10px;}
+
+        #btn-start, #btn-restart {
+            font-size: 1.5em; padding: 15px 40px; max-width: 300px;
+            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4); background: var(--accent);
+            color: white; border: none; border-radius: 4px; cursor: pointer;
+            text-transform: uppercase; font-weight: bold;
+        }
+        #btn-start:hover, #btn-restart:hover { background: var(--accent-hover); }
+
+        /* --- Desktop & Windows --- */
+        #game-desktop { 
+            position: relative; width: 100vw; height: 100vh; display: none; 
+            background: #111; overflow: hidden;
+        }
+
+        /* Status Bar anpinnen */
+        #status-bar {
+            position: absolute; top: 0; left: 0; width: 100%;
+            background: #0a0a0a; border-bottom: 2px solid var(--accent);
+            display: flex; justify-content: space-around; align-items: center;
+            padding: 10px 20px; z-index: 3000; box-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        }
+
+        .os-window {
+            position: absolute;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column;
+            min-width: 250px;
+            min-height: 150px;
+            max-height: 95vh;
+            resize: both; /* Aktiviert die Größenverstellbarkeit */
+            overflow: hidden; /* Wird für 'resize: both' zwingend benötigt */
+        }
+        
+        /* Macht den Anfasser unten rechts besser sichtbar */
+        .os-window::-webkit-resizer {
+            background-color: transparent;
+            border-left: 2px solid var(--border);
+            border-top: 2px solid var(--border);
+        }
+        
+        /* Verhindert, dass das Resize-Icon angezeigt wird, wenn minimiert */
+        .os-window.minimized {
+            resize: none !important;
+            height: auto !important;
+        }
+
+        .window-header {
+            background: #1a1a1a; padding: 6px 10px; font-size: 0.9em;
+            cursor: grab; border-top-left-radius: 8px; border-top-right-radius: 8px;
+            border-bottom: 2px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            font-weight: bold; color: var(--accent); user-select: none;
+        }
+        .window-header:active { cursor: grabbing; }
+
+        .window-controls button {
+            background: transparent; border: none; color: #aaa; font-size: 1.2em;
+            cursor: pointer; padding: 0 5px; width: auto; margin: 0;
+            display: inline;
+        }
+        .window-controls button:hover { color: #fff; transform: none; background: transparent; }
+
+        .window-content { padding: 8px; overflow-y: auto; font-size: 0.85em; flex-grow: 1; }
+        .os-window.minimized .window-content { display: none; }
+
+        h3 { margin-top: 0; border-bottom: 2px solid var(--border); padding-bottom: 4px; margin-bottom: 8px; font-size: 1.1em; color: #fff; }
+        h4 { margin: 8px 0 4px 0; font-size: 0.9em; color: #ccc; font-size: 1em; }
+
+        .stat { 
+            display: flex; justify-content: space-between; margin-bottom: 8px; 
+            font-size: 1em; background: rgba(255,255,255,0.05); padding: 4px 6px; border-radius: 3px; margin-bottom: 4px;
+        }
+        .stat span { font-weight: bold; color: var(--accent); }
+        
+        #status-bar .stat { margin: 0; background: transparent; }
+
+        button { 
+            width: 100%; padding: 4px 8px; margin-bottom: 4px; font-size: 0.8em; background: var(--accent); 
+            color: white; border: none; border-radius: 4px; font-size: 0.9em; 
+            cursor: pointer; transition: background 0.2s, transform 0.1s; font-weight: bold;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        button span { pointer-events: none; }
+        button:hover:not(.locked):not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); }
+        button:active:not(.locked):not(:disabled) { transform: translateY(0); }
+        button:disabled { background: #333; cursor: not-allowed; color: #777; opacity: 0.7; }
+        
+        .locked { opacity: 0.5; } 
+        
+        .btn-upgrade { background: var(--blue); }
+        .btn-upgrade:hover:not(.locked):not(:disabled) { background: var(--blue-hover); }
+        .btn-invest { background: #00695c; }
+        .btn-invest:hover:not(.locked):not(:disabled) { background: #004d40; }
+        
+        .btn-execute { background: var(--success); font-size: 1.2em; padding: 8px; text-transform: uppercase; font-size: 0.9em; justify-content: center; margin:0;}
+        .btn-execute:hover:not(:disabled) { background: #388e3c; }
+
+        /* Influence Bars */
+        .inf-container { margin-bottom: 12px; }
+        .inf-header { display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; font-weight: bold; }
+        .bar-bg { width: 100%; background: #333; height: 8px; border-radius: 4px; overflow: hidden; border: 1px solid #111; }
+        .bar-fill { height: 100%; transition: width 0.5s ease-in-out; }
+
+        /* Roster Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+        th { text-align: left; border-bottom: 2px solid var(--border); padding: 2px 4px; font-size: 0.85em; color: #aaa; }
+        td { padding: 2px 4px; border-bottom: 1px solid #333; font-size: 0.85em; vertical-align: middle; }
+        
+        .btn-tiny {
+            width: auto; padding: 2px 4px; margin: 0; margin-left: 4px; font-size: 0.75em;
+            background: var(--blue); display: inline-block;
+        }
+
+        .w-0 { color: #888; }
+        .w-1 { color: #e0e0e0; }
+        .w-2 { color: var(--warning); }
+        .w-3 { color: var(--accent); font-weight: bold; }
+
+        .attr { font-weight: bold; display: inline-block; width: 18px; text-align: center; }
+        .a-krf { color: var(--c-krf); }
+        .a-ges { color: var(--c-ges); }
+        .a-int { color: var(--c-int); }
+
+        /* --- Mission Board --- */
+        .mission-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; }
+        
+        .task-card { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; }
+        .task-card.active { border-color: var(--blue); background: #1a222b; }
+        .task-header { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 4px; }
+        .task-title { font-weight: bold; font-size: 1.1em; color: #fff; }
+        .task-chance { font-weight: bold; }
+        .task-req { font-size: 0.85em; color: #aaa; margin-bottom: 10px; }
+
+        .slot {
+            background: #252525; border: 1px dashed #444; border-radius: 4px;
+            padding: 4px 6px; margin-bottom: 3px; font-size: 0.8em; font-size: 0.9em;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .slot.assigned { background: #2a3b2c; border-style: solid; border-color: var(--success); color: #e0e0e0; }
+        .slot.empty { color: #666; font-style: italic; }
+        .boss-name { color: var(--warning); font-weight: bold; }
+        
+        .remove-btn { color: #ff5252; cursor: pointer; font-weight: bold; font-size: 1.1em; padding: 0 5px; }
+        .remove-btn:hover { color: #ff0000; }
+
+        select { width: 100%; padding: 6px; background: #333; color: #fff; border: 1px solid var(--border); border-radius: 4px; font-size: 0.9em; cursor: pointer; }
+
+        #log { height: 100%; min-height: 200px; overflow-y: auto; background: #0a0a0a; padding: 15px; border-radius: 4px; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; border: 1px inset var(--border); }
+        .log-entry { margin-bottom: 8px; border-bottom: 1px dashed #222; padding-bottom: 8px; line-height: 1.4; }
+        .log-success { color: var(--success); }
+        .log-danger { color: var(--accent); }
+        .log-warning { color: var(--warning); }
+        .log-info { color: var(--blue); }
+
+        /* Drag & Drop */
+        .draggable-member { cursor: grab; }
+        .draggable-member:active { cursor: grabbing; }
+        .drop-zone.drag-over { 
+            background-color: rgba(25, 118, 210, 0.15) !important; 
+            border-color: var(--blue) !important; 
+            box-shadow: 0 0 10px rgba(25, 118, 210, 0.5); 
+        }
+        .task-card { transition: all 0.2s; }
+        
+    </style>
+</head>
+<body>
+
+    <div id="start-screen">
+        <img id="title-image" src="images/title.png" alt="GODFATHER" style="max-width: 80%; max-height: 250px; margin-bottom: 30px; object-fit: contain;" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'600\' height=\'200\'><rect width=\'600\' height=\'200\' fill=\'%23222\'/><text x=\'300\' y=\'110\' font-family=\'Arial\' font-size=\'30\' fill=\'%23d32f2f\' text-anchor=\'middle\' font-weight=\'bold\'>TITELBILD PLATZHALTER (images/title.png)</text></svg>'">
+        <button id="btn-start" onclick="startGame()">Spiel starten</button>
+    </div>
+
+    <div id="victory-modal-overlay">
+        <pre class="ascii-art ascii-victory">
+__     __          __          __ _         _ 
+\ \   / /          \ \        / /(_)       | |
+ \ \_/ /___  _   _  \ \  /\  / /  _ _ _    | |
+  \   // _ \| | | |  \ \/  \/ /  | | '_ \  |_|
+   | || (_) | |_| |   \  /\  /   | | | | |  _
+   |_| \___/ \__,_|    \/  \/    |_|_| |_| |_|
+        </pre>
+        <h2 style="color:var(--warning); text-transform:uppercase; letter-spacing:3px; margin-bottom:30px;">Du bist der Godfather der Stadt!</h2><p style="color:#ccc; margin-top:-20px; margin-bottom:30px;">Alle Rivalen sind vernichtet und du hast die absolute Macht (5000 Respekt) erreicht.</p>
+        <button id="btn-restart" onclick="location.reload()">Neues Imperium gründen</button>
+    </div>
+
+    <div id="weekly-modal-overlay">
+        <div id="weekly-modal"></div>
+    </div>
+
+    <!-- Desktop Area -->
+    <div id="game-desktop">
+        
+        <div id="status-bar">
+            <div class="stat">Rang: <span id="ui-rank">Straßendieb</span></div>
+            <div class="stat">Respekt: <span id="ui-respect">0</span> / 5000</div>
+            <div class="stat">Woche: <span id="ui-turn" style="color:#fff;">1</span></div>
+            <div class="stat">Kapital: <span id="ui-cash">500 $</span></div>
+            <div class="stat" title="Bei 100% schlägt die Polizei zu!">Fahndung: <span id="ui-heat">0 %</span></div>
+            <div style="display:flex; gap: 10px;">
+                <button class="btn-execute" id="btn-execute" onclick="executeWeek()" style="padding: 10px 20px;">▶ Woche ausführen</button>
+            </div>
+        </div>
+
+        <!-- 1. Fenster: Personalübersicht -->
+        <div class="os-window" id="win-personal" style="top: 50px; left: 300px; width: 550px; height: 380px; z-index: 10;">
+            <div class="window-header">
+                <span>Personalübersicht</span>
+                <div class="window-controls"><button onclick="toggleWindow('win-personal')">_</button></div>
+            </div>
+            <div class="window-content">
+                <button onclick="actionRecruit()" id="btn-recruit"><span>Schläger anheuern</span> <span class="chance">- 250 $</span></button>
+                <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                    <span style="color: #aaa; font-size: 0.9em;">Freies Personal (Ausruhen): <b id="ui-idle-count" style="color: #fff;">0</b></span>
+                    <span style="color: #aaa; font-size: 0.9em;">Gehalt: <b id="ui-upkeep" style="color: #fff;">0</b> $ / W.</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Waffe</th>
+                            <th title="Kraft" class="a-krf">KRF</th>
+                            <th title="Geschick" class="a-ges">GES</th>
+                            <th title="Intelligenz" class="a-int">INT</th>
+                            <th>Einsatz</th>
+                        </tr>
+                    </thead>
+                    <tbody id="roster-list"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 2. Fenster: Ausrüstung & Inventar -->
+        <div class="os-window" id="win-ausruestung" style="top: 440px; left: 300px; width: 300px; bottom: 10px;">
+            <div class="window-header">
+                <span>Ausrüstung & Inventar</span>
+                <div class="window-controls"><button onclick="toggleWindow('win-ausruestung')">_</button></div>
+            </div>
+            <div class="window-content">
+                <div style="display:flex; align-items:center; margin-bottom: 10px;">
+                    <img id="ui-car-img" src="images/car_0.png" width="35" height="35" style="margin-right:15px; border-radius:4px; background:#222; border:1px solid #444;" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'35\' height=\'35\'><rect width=\'35\' height=\'35\' fill=\'%23333\'/><text x=\'25\' y=\'22\' font-family=\'Arial\' font-size=\'12\' fill=\'%23888\' text-anchor=\'middle\'>Auto</text></svg>'">
+                    <div class="stat" style="font-size: 0.9em; flex-grow:1; margin-bottom:0;">Fuhrpark:<br><span id="ui-car" style="color: var(--blue)">Zu Fuß</span></div>
+                </div>
+                <button class="btn-upgrade" id="btn-car" onclick="buyVehicle()">
+                    <span id="text-car">Fahrzeug kaufen</span> <span class="chance" id="cost-car">- 0 $</span>
+                </button>
+                
+                <hr style="border-color: #333; margin: 15px 0;">
+                <details id="inventory-details" open>
+                    <summary style="cursor:pointer; font-weight:bold; color:var(--accent); user-select:none; outline:none;">📦 Inventar (Einlagern & Zuweisen)</summary>
+                    <div id="inventory-content" style="margin-top: 10px;">
+                        <!-- Wird per JS gefüllt -->
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <!-- 3. Fenster: Training -->
+        <div class="os-window" id="win-training" style="top: 440px; left: 610px; width: 240px; bottom: 10px;">
+            <div class="window-header">
+                <span>Training (50$ pro Kopf)</span>
+                <div class="window-controls"><button onclick="toggleWindow('win-training')">_</button></div>
+            </div>
+            <div class="window-content">
+                <div class="mission-grid" id="training-board"></div>
+            </div>
+        </div>
+
+        <!-- 4. Fenster: Basisausbau & Geschäfte -->
+        <div class="os-window" id="win-basis" style="top: 50px; left: 10px; width: 280px;">
+            <div class="window-header">
+                <span>Basisausbau & Geschäfte</span>
+                <div class="window-controls"><button onclick="toggleWindow('win-basis')">_</button></div>
+            </div>
+            <div class="window-content">
+                <button onclick="actionBribe()" id="btn-bribe"><span>Polizei schmieren (-50% Heat)</span> <span class="chance">- 800 $</span></button>
+                
+                <h4>HQ-Verteidigung</h4>
+                <div class="stat" style="font-size: 0.9em; margin-bottom: 10px;">Sicherheit: <span id="ui-base-def" style="color: var(--success)">Offenes Haus (0%)</span></div>
+                <button class="btn-upgrade" id="btn-base-def" onclick="buyBaseDefense()">
+                    <span id="text-base-def">Wachhunde</span> <span class="chance" id="cost-base-def">- 2500 $</span>
+                </button>
+
+                <h4>Einfluss & Rivalen</h4>
+                <div class="inf-container">
+                    <div class="inf-header"><span style="color:var(--accent);">Deine Familie</span> <span id="ui-inf-player">0</span></div>
+                    <div class="bar-bg"><div class="bar-fill" id="bar-player" style="width: 0%; background: var(--accent);"></div></div>
+                </div>
+                <div id="rivals-container"></div>
+                
+                <h4>Geld waschen & Investieren</h4>
+                <div id="invest-container"></div>
+            </div>
+        </div>
+
+        <!-- 5. Fenster: Illegale Jobs -->
+        <div class="os-window" id="win-jobs" style="top: 50px; left: 860px; width: 320px; height: 550px;">
+            <div class="window-header">
+                <span>Illegale Jobs</span>
+                <div class="window-controls"><button onclick="toggleWindow('win-jobs')">_</button></div>
+            </div>
+            <div class="window-content">
+                <button class="btn-upgrade" id="btn-prep-intel" onclick="buyIntel()"><span>Wachplan kaufen (+5% für Bankraub)</span> <span class="chance">- 250 $</span></button>
+                <div class="mission-grid" id="mission-board"></div>
+            </div>
+        </div>
+
+        
+        <!-- 7. Fenster: Politik -->
+        <div class="os-window" id="win-politics" style="top: 360px; left: 10px; width: 280px;">
+            <div class="window-header">
+                <span>Politik & Einfluss</span>
+                <div class="window-controls"><button onclick="toggleWindow('win-politics')">_</button></div>
+            </div>
+            <div class="window-content">
+                <p style="font-size: 0.85em; color: #aaa; margin-top:0;">Riskante Aktionen für extremen Einflussgewinn.</p>
+                <div class="mission-grid" id="politics-board"></div>
+            </div>
+        </div>
+
+        <!-- 6. Fenster: Logbuch -->
+        <div class="os-window" id="win-log" style="top: 610px; left: 860px; width: 320px; bottom: 10px;">
+            <div class="window-header">
+                <span>Aktivitäten-Logbuch</span>
+                <div class="window-controls"><button onclick="toggleWindow('win-log')">_</button></div>
+            </div>
+            <div class="window-content" style="padding: 0; display:flex; flex-direction:column;">
+                <div id="log" style="flex-grow:1; border:none; border-radius:0;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Windows Management ---
+        let highestZIndex = 100;
+
+        function toggleWindow(windowId) {
+            const win = document.getElementById(windowId);
+            win.classList.toggle('minimized');
+        }
+
+        function bringToFront(windowElement) {
+            highestZIndex++;
+            windowElement.style.zIndex = highestZIndex;
+        }
+
+        function makeDraggable(windowElement) {
+            const header = windowElement.querySelector('.window-header');
+            let isDragging = false;
+            let startX, startY, initialLeft, initialTop;
+
+            windowElement.addEventListener('mousedown', () => bringToFront(windowElement));
+
+            header.addEventListener('mousedown', (e) => {
+                if(e.target.tagName.toLowerCase() === 'button') return; 
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                
+                const rect = windowElement.getBoundingClientRect();
+                initialLeft = windowElement.offsetLeft;
+                initialTop = windowElement.offsetTop;
+                
+                document.body.style.userSelect = 'none';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                
+                let newLeft = initialLeft + dx;
+                let newTop = initialTop + dy;
+                
+                // Grenzen berechnen, damit Fenster nicht verschwinden
+                const minTop = 50; // Wegen der Statusleiste oben
+                const maxTop = window.innerHeight - 40; 
+                const maxLeft = window.innerWidth - 100;
+                
+                newTop = Math.max(minTop, Math.min(newTop, maxTop));
+                newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+                
+                windowElement.style.left = `${newLeft}px`;
+                windowElement.style.top = `${newTop}px`;
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                document.body.style.userSelect = '';
+            });
+        }
+
+        function initDesktop() {
+            document.querySelectorAll('.os-window').forEach(win => {
+                makeDraggable(win);
+            });
+        }
+
+        // --- Drag & Drop ---
+        function allowDrop(ev) {
+            ev.preventDefault();
+        }
+
+        function dragEnter(ev) {
+            ev.preventDefault();
+            const target = ev.currentTarget;
+            if (target && target.classList) target.classList.add('drag-over');
+        }
+
+        function dragLeave(ev) {
+            const target = ev.currentTarget;
+            if (target && target.classList) target.classList.remove('drag-over');
+        }
+
+        function drop(ev, taskId) {
+            ev.preventDefault();
+            const target = ev.currentTarget;
+            if (target && target.classList) target.classList.remove('drag-over');
+            let memberId = ev.dataTransfer.getData("text/plain");
+            if (memberId !== "") {
+                setTask(memberId, taskId);
+            }
+        }
+
+        // --- Game Data ---
+        const namePool = ["Narben-Joe", "Ma Baker", "Mecki Messer", "Buddy die Klinge", "Bam Bam Bobo", "Al der Schlitzer", "Bleifuß-Paul", "Zigarren-Carmine", "Vito der Stumme", "Knöchel-Brecher Tony", "Donnie Rasiermesser", "Frankie Four Fingers", "Slippery Pete", "Baby Face Nelson", "Mickey", "Lucky Luciano", "Bugsy", "Dutch", "Fat Tony", "Noodles", "Sally Boy", "Vinny the Chin", "Polly Pistole", "Sammy Zement", "Jimmy the Rat", "Zwei-Finger Jack", "Tommy Gun Tommy", "Der Schakal", "Eisfeuer-Eddy", "Boris", "Flüster-Franz", "Dynamit-Dora", "Kopfschuss-Kalle", "Leo", "Blei-Berta", "Klingen-Klaus"];
+        let availableNames = [...namePool].sort(() => Math.random() - 0.5);
+
+        const weaponTiers = [
+            { id: 0, name: "Fäuste", cost: 0, bonus: 0, save: 0, class: "w-0" },
+            { id: 1, name: "Revolver", cost: 150, bonus: 10, save: 20, class: "w-1" },
+            { id: 2, name: "Schrotflinte", cost: 450, bonus: 25, save: 45, class: "w-2" },
+            { id: 3, name: "Tommy Gun", cost: 1000, bonus: 45, save: 70, class: "w-3" }
+        ];
+
+        const vehicleTiers = [
+            { id: 0, name: "Zu Fuß", cost: 0, bonus: 0, raidSave: 0 },
+            { id: 1, name: "Rostige Schrottkarre", cost: 500, bonus: 5, raidSave: 0.1 },
+            { id: 2, name: "Lieferwagen", cost: 1500, bonus: 15, raidSave: 0.2 },
+            { id: 3, name: "Alltagswagen", cost: 4000, bonus: 25, raidSave: 0.4 },
+            { id: 4, name: "Panzertransporter", cost: 12000, bonus: 40, raidSave: 0.75 }
+        ];
+
+        const baseDefenseTiers = [
+            { level: 0, name: "Offenes Haus", cost: 0, bonus: 0 },
+            { level: 1, name: "Wachhunde", cost: 2500, bonus: 10 },
+            { level: 2, name: "Verstärkte Türen", cost: 7500, bonus: 20 },
+            { level: 3, name: "Panzerglas & Kameras", cost: 15000, bonus: 30 },
+            { level: 4, name: "Bewaffnete Posten", cost: 35000, bonus: 40 },
+            { level: 5, name: "Bunkeranlagen", cost: 75000, bonus: 50 }
+        ];
+
+        const tasks = {
+            defend: { id: "defend", name: "Revier verteidigen", min: 1, baseChance: 100, heat: 0, respect: 0, loot: [0,0], desc: "Senkt Angriffs-Chancen der Rivalen", stats: { krf: 1, ges: 1 } },
+            bouncer: { id: "bouncer", name: "Türsteher (Nutzt KRF)", min: 1, desc: "Sicheres Geld" },
+            trainKrf: { id: "trainKrf", name: "Training: Kraft", min: 1, desc: "Kosten: 50$ / Kopf" },
+            trainGes: { id: "trainGes", name: "Training: Geschick", min: 1, desc: "Kosten: 50$ / Kopf" },
+            trainInt: { id: "trainInt", name: "Training: Intelligenz", min: 1, desc: "Kosten: 50$ / Kopf" },
+            
+            shoplift: { id: "shoplift", name: "Ladendiebstahl", min: 1, baseChance: 80, heat: 3, respect: 2, loot: [50, 150], bail: 150, stats: { ges: 3 } },
+            scam: { id: "scam", name: "Betrugsmasche", min: 1, baseChance: 70, heat: 5, respect: 5, loot: [150, 350], bail: 300, stats: { int: 3 } },
+            carTheft: { id: "carTheft", name: "Autodiebstahl", min: 1, baseChance: 60, heat: 8, respect: 10, loot: [0, 0], bail: 500, stats: { ges: 2, int: 1 } },
+            extort: { id: "extort", name: "Schutzgeld", min: 1, baseChance: 70, heat: 5, respect: 15, loot: [250, 500], bail: 400, stats: { krf: 3 } },
+            safe: { id: "safe", name: "Tresor knacken", min: 2, baseChance: 55, heat: 12, respect: 20, loot: [600, 1200], bail: 800, stats: { ges: 3 } },
+            smuggle: { id: "smuggle", name: "Schmuggeln (Auto nötig)", min: 2, baseChance: 70, heat: 10, respect: 25, loot: [800, 1500], bail: 1200, stats: { int: 3 } },
+            kidnap: { id: "kidnap", name: "Kidnapping", min: 3, baseChance: 45, heat: 25, respect: 40, loot: [1500, 3500], bail: 2500, stats: { krf: 3 } },
+            
+            polBribe: { id: "polBribe", name: "Richter schmieren (-1500$)", min: 1, baseChance: 85, heat: 15, respect: 100, loot: [0,0], bail: 2000, desc: "Sichere Methode für Einfluss.", stats: { int: 1 } },
+            polIntimidate: { id: "polIntimidate", name: "Stadtrat einschüchtern", min: 2, baseChance: 65, heat: 40, respect: 200, loot: [0, 0], bail: 3000, desc: "Hohes Fahndungsrisiko!", stats: { krf: 3 } },
+            polBlackmail: { id: "polBlackmail", name: "Bürgermeister erpressen", min: 3, baseChance: 45, heat: 60, respect: 400, loot: [1000, 2500], bail: 5000, desc: "Extreme Fahndung, massiver Respekt.", stats: { int: 3, ges: 2 } },
+            polWitness: { id: "polWitness", name: "Zeugen beseitigen", min: 3, baseChance: 45, heat: 0, respect: 50, loot: [0, 0], bail: 5000, desc: "Senkt Fahndung um 60%. Bei Fehlschlag SOFORTIGE Razzia!", stats: { krf: 1, ges: 1, int: 1 } },
+            
+            bankScout: { id: "bankScout", name: "Vorbereitung: Bank ausspähen", min: 1, baseChance: 100, heat: 0, respect: 0, loot: [0,0], desc: "Gibt +5% auf Bankraub" },
+            bankPlan: { id: "bankPlan", name: "Vorbereitung: Flucht planen", min: 1, baseChance: 100, heat: 0, respect: 0, loot: [0,0], desc: "Gibt +5% auf Bankraub", stats: { int: 1 } },
+            
+            bank: { id: "bank", name: "Bankraub", min: 4, baseChance: 20, heat: 45, respect: 100, loot: [4000, 8000], bail: 5000, stats: { krf: 1, ges: 1, int: 1 } },
+            turfWar: { id: "turfWar", name: "Revierkampf (LEBENSGEFAHR)", min: 5, baseChance: 25, heat: 30, respect: 0, loot: [0,0], stats: { krf: 2, ges: 1, int: 1 } },
+            trap: { id: "trap", name: "Sprengstofffalle", min: 1, baseChance: 0, heat: 25, respect: 0, loot: [0,0], desc: "Zieht Feind Macht ab. GES 5=10%, 15=95%.", stats: { ges: 1 } }
+        };
+
+        let state = {
+            turn: 1, cash: 500, respect: 0, heat: 0, vehicleLevel: 0, baseDefenseLevel: 0,
+            inventory: { weapons: [0, 0, 0, 0], vehicles: [0, 0, 0, 0, 0] },
+            gang: [
+                { id: 0, name: "Du (Boss)", weapon: 0, krf: 1, ges: 1, int: 2, task: 'idle', isBoss: true }
+            ],
+            bankPrep: { intel: false, scout: false, plan: false },
+            investments: {
+                housing: { id: 'housing', name: "Wohngebäude", level: 0, baseCost: 1000, income: 50 },
+                shops: { id: 'shops', name: "Läden (Schutzgeld)", level: 0, baseCost: 2500, income: 150 },
+                brothel: { id: 'brothel', name: "Prostitution", level: 0, baseCost: 5000, income: 350 },
+                industry: { id: 'industry', name: "Industrieanlagen", level: 0, baseCost: 12000, income: 1000 }
+            },
+            rivals: [
+                { id: 1, name: "Le Mettes", power: 150, active: true, color: "#4caf50" },
+                { id: 2, name: "Die Trilliade", power: 300, active: true, color: "#ff9800" },
+                { id: 3, name: "Mr.Big", power: 600, active: true, color: "#9c27b0" }
+            ],
+            turfWarTarget: null,
+            memberIdCounter: 0,
+            pendingArrests: [],
+            pendingCars: [],
+            logsThisWeek: []
+        };
+
+        function startGame() {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('game-desktop').style.display = 'block';
+            initDesktop();
+            updateUI();
+            log("Willkommen in Chicago. Du bist ganz unten angekommen. Bau dir eine mächtige Gang auf und erobere die Stadt!", "log-success");
+        }
+
+        function getRank() {
+            const ranks = [
+                { t: 0, n: "Straßendieb" }, { t: 250, n: "Schläger" }, { t: 800, n: "Capo" },
+                { t: 1500, n: "Unterboss" }, { t: 3000, n: "Boss" }, { t: 5000, n: "Don (Godfather)" }
+            ];
+            let r = ranks[0].n;
+            for(let i=0; i<ranks.length; i++) { if(state.respect >= ranks[i].t) r = ranks[i].n; }
+            return r;
+        }
+
+        function getInvestCost(key) {
+            let inv = state.investments[key];
+            return Math.floor(inv.baseCost * Math.pow(1.3, inv.level));
+        }
+
+        function buyInvest(key) {
+            let cost = getInvestCost(key);
+            if (state.cash >= cost) {
+                state.cash -= cost;
+                state.investments[key].level++;
+                updateUI();
+            }
+        }
+
+        function calculateTaskChance(taskObj, assignedMembers) {
+            if (assignedMembers.length < taskObj.min) return 0;
+            
+            if (taskObj.id === 'trap') {
+                let maxGes = 0;
+                assignedMembers.forEach(m => { if(m.ges > maxGes) maxGes = m.ges; });
+                let chance = 0;
+                if (maxGes <= 5) chance = (maxGes / 5) * 10;
+                else if (maxGes >= 15) chance = 95;
+                else chance = 10 + ((maxGes - 5) / 10) * 85;
+                return Math.min(95, Math.max(5, chance));
+            }
+            
+            let base = taskObj.baseChance;
+            let heatPenalty = state.heat * 0.2;
+            
+            let bankBonus = 0;
+            if (taskObj.id === 'bank') {
+                if(state.bankPrep.intel) bankBonus += 5;
+                if(state.bankPrep.scout) bankBonus += 5;
+                if(state.bankPrep.plan) bankBonus += 5;
+            }
+
+            let vehicleBonus = (taskObj.id !== 'idle' && taskObj.id !== 'defend' && !taskObj.id.startsWith('train') && !taskObj.id.startsWith('bankS') && !taskObj.id.startsWith('bankP') && taskObj.id !== 'bouncer') ? vehicleTiers[state.vehicleLevel].bonus : 0;
+            
+            let squadWeaponBonus = 0;
+            let squadSkillBonus = 0;
+            let memberBonus = Math.max(0, assignedMembers.length - taskObj.min) * 5; 
+
+            assignedMembers.forEach(m => {
+                squadWeaponBonus += weaponTiers[m.weapon].bonus;
+                if (taskObj.stats) {
+                    if (taskObj.stats.krf) squadSkillBonus += (m.krf * taskObj.stats.krf * 3);
+                    if (taskObj.stats.ges) squadSkillBonus += (m.ges * taskObj.stats.ges * 3);
+                    if (taskObj.stats.int) squadSkillBonus += (m.int * taskObj.stats.int * 3);
+                }
+            });
+
+            if(assignedMembers.length > 0) squadWeaponBonus = squadWeaponBonus / assignedMembers.length;
+            let total = base - heatPenalty + vehicleBonus + squadWeaponBonus + squadSkillBonus + memberBonus + bankBonus;
+            return Math.min(95, Math.max(5, total)); 
+        }
+
+        function getSaveChance(member) {
+            return Math.min(95, weaponTiers[member.weapon].save + (member.ges * 4) + (member.int * 1));
+        }
+
+        function setTask(memberId, taskId) {
+            memberId = parseInt(memberId);
+            if(isNaN(memberId)) return;
+            const member = state.gang.find(m => m.id === memberId);
+            if(member) {
+                member.task = taskId;
+                updateUI();
+            }
+        }
+
+        function upgradeWeapon(memberId) {
+            const member = state.gang.find(m => m.id === memberId);
+            if(!member) return;
+            const nextWpn = weaponTiers[member.weapon + 1];
+            if (nextWpn) {
+                if (state.cash < nextWpn.cost) return;
+                state.cash -= nextWpn.cost;
+                if(member.weapon > 0) state.inventory.weapons[member.weapon]++; // Alte Waffe einlagern
+                member.weapon++;
+                updateUI();
+            }
+        }
+
+        function updateRoster() {
+            const tbody = document.getElementById('roster-list');
+            tbody.innerHTML = '';
+            state.gang.forEach(member => {
+                const tr = document.createElement('tr');
+                
+                let safeName = member.isBoss ? 'boss' : member.name.replace(/\s+/g, '_').toLowerCase();
+                let memberImg = `<img src="images/member_${safeName}.png" width="35" height="35" style="vertical-align:middle; margin-right:10px; border-radius:4px; border:1px solid #444; background:#222;" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'35\' height=\'35\'><rect width=\'35\' height=\'35\' fill=\'%23333\'/><text x=\'25\' y=\'22\' font-family=\'Arial\' font-size=\'12\' fill=\'%23888\' text-anchor=\'middle\'>Kopf</text></svg>'">`;
+                
+                const wData = weaponTiers[member.weapon];
+                let wpnImg = `<img src="images/weapon_${member.weapon}.png" width="35" height="35" style="vertical-align:middle; margin-right:10px; border-radius:4px; border:1px solid #444; background:#222;" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'35\' height=\'35\'><rect width=\'35\' height=\'35\' fill=\'%23333\'/><text x=\'25\' y=\'22\' font-family=\'Arial\' font-size=\'12\' fill=\'%23888\' text-anchor=\'middle\'>Waffe</text></svg>'">`;
+                
+                let wpnHtml = `<div style="display:flex; align-items:center;">${wpnImg} <div style="display:flex; flex-direction:column; align-items:flex-start;"><span class="${wData.class}">${wData.name}</span>`;
+                
+                if (member.weapon < weaponTiers.length - 1) {
+                    const nextCost = weaponTiers[member.weapon + 1].cost;
+                    let isLocked = state.cash < nextCost ? 'locked' : '';
+                    wpnHtml += `<button class="btn-tiny ${isLocked}" onclick="upgradeWeapon(${member.id})" title="${nextCost}$" style="margin-left:0; margin-top:4px;"> + Upgrade </button>`;
+                }
+                wpnHtml += `</div></div>`;
+
+                let displayName = `<div style="display:flex; align-items:center;">${memberImg} ` + (member.isBoss ? `<span class="boss-name">⭐ ${member.name}</span>` : `<span>${member.name}</span>`) + `</div>`;
+                
+                let taskOptions = `<select onchange="setTask(${member.id}, this.value)" style="width:100%; max-width: 130px; padding:2px; font-size: 0.9em; background:#222; color:#fff; border:1px solid var(--border); border-radius:3px;">`;
+                taskOptions += `<option value="idle" ${member.task==='idle'?'selected':''}>Frei / Ausruhen</option>`;
+                for(let t in tasks) {
+                    taskOptions += `<option value="${t}" ${member.task===t?'selected':''}>${tasks[t].name}</option>`;
+                }
+                taskOptions += `</select>`;
+
+                tr.innerHTML = `
+                    <td>${displayName}</td>
+                    <td>${wpnHtml}</td>
+                    <td><span class="attr a-krf">${member.krf}</span></td>
+                    <td><span class="attr a-ges">${member.ges}</span></td>
+                    <td><span class="attr a-int">${member.int}</span></td>
+                    <td>${taskOptions}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function getRequiredStatsString(t) {
+            if(!t.stats) return t.desc || "";
+            let reqs = [];
+            if(t.stats.krf) reqs.push('<span class="a-krf">KRF</span>');
+            if(t.stats.ges) reqs.push('<span class="a-ges">GES</span>');
+            if(t.stats.int) reqs.push('<span class="a-int">INT</span>');
+            return "Wichtig: " + reqs.join(', ');
+        }
+
+        function updateMissionBoard() {
+            const boardJobs = document.getElementById('mission-board');
+            const boardTrain = document.getElementById('training-board');
+            const boardPolitics = document.getElementById('politics-board');
+            if(boardJobs) boardJobs.innerHTML = '';
+            if(boardTrain) boardTrain.innerHTML = '';
+            if(boardPolitics) boardPolitics.innerHTML = '';
+
+            let idleMembers = state.gang.filter(m => m.task === 'idle');
+            document.getElementById('ui-idle-count').innerText = idleMembers.length;
+
+            for (const [taskId, t] of Object.entries(tasks)) {
+                let assigned = state.gang.filter(m => m.task === taskId);
+                let isCardActive = assigned.length > 0;
+                let chanceColor = "#fff";
+                let chanceText = "---";
+
+                if (taskId.startsWith('train')) {
+                    const cost = assigned.length * 50;
+                    chanceText = `-${cost}$`;
+                    if (state.cash < cost && assigned.length > 0) { 
+                        chanceColor = "var(--accent)"; chanceText += " (Zu teuer!)"; 
+                    }
+                } else if (taskId === 'defend' || taskId === 'bouncer') {
+                    chanceText = assigned.length > 0 ? "Aktiv" : "---";
+                } else {
+                    if (assigned.length > 0 && assigned.length < t.min) {
+                        chanceColor = "var(--accent)"; chanceText = `Zu wenig Leute`;
+                    } else if (taskId === 'smuggle' && state.vehicleLevel === 0 && assigned.length > 0) {
+                        chanceColor = "var(--accent)"; chanceText = `FEHLT AUTO`;
+                    } else if (assigned.length >= t.min) {
+                        const chance = calculateTaskChance(t, assigned);
+                        chanceText = `${Math.floor(chance)}%`;
+                        if (chance < 40) chanceColor = "var(--accent)";
+                        else if (chance > 70) chanceColor = "var(--success)";
+                        else chanceColor = "var(--warning)";
+                    }
+                }
+
+                let extraHtml = '';
+                if (taskId === 'turfWar' || taskId === 'trap') {
+                    let activeRivals = state.rivals.filter(r => r.active);
+                    if (activeRivals.length > 0) {
+                        if (!state.turfWarTarget || !activeRivals.find(r=>r.id==state.turfWarTarget)) state.turfWarTarget = activeRivals[0].id;
+                        let opts = activeRivals.map(r => `<option value="${r.id}" ${state.turfWarTarget==r.id?'selected':''}>${r.name}</option>`).join('');
+                        extraHtml += `<div style="margin-top:8px;"><select onchange="state.turfWarTarget=this.value" style="padding:4px;">${opts}</select></div>`;
+                    } else {
+                        extraHtml += `<div style="margin-top:8px; color:var(--success); font-weight:bold;">Alle Rivalen vernichtet!</div>`;
+                        if(assigned.length > 0) { chanceColor = "var(--accent)"; chanceText = "Keine Ziele"; }
+                    }
+                }
+                
+                if (taskId === 'bank') {
+                    let bBonuses = [];
+                    if (state.bankPrep.intel) bBonuses.push('Wachplan');
+                    if (state.bankPrep.scout) bBonuses.push('Ausgespäht');
+                    if (state.bankPrep.plan) bBonuses.push('Flucht');
+                    if (bBonuses.length > 0) {
+                        extraHtml += `<div style="margin-top:5px; color:var(--success); font-size:0.85em;">Boni aktiv: ${bBonuses.join(', ')}</div>`;
+                    }
+                }
+
+                let cardHtml = `
+                    <div class="task-card ${isCardActive ? 'active' : ''}" style="padding: 10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                            <span style="font-weight:bold; font-size:0.95em;">${t.name}</span>
+                            <span style="color:${chanceColor}; font-weight:bold;">${chanceText}</span>
+                        </div>
+                        <div style="font-size:0.8em; color:#aaa;">
+                            Personal: <span style="color:${assigned.length >= t.min ? '#fff' : 'var(--accent)'}">${assigned.length}</span> / ${t.min}
+                            <br>${getRequiredStatsString(t)}
+                        </div>
+                        ${extraHtml}
+                    </div>
+                `;
+
+                if (taskId.startsWith('train')) {
+                    if(boardTrain) boardTrain.innerHTML += cardHtml;
+                } else if (taskId.startsWith('pol')) {
+                    if (boardPolitics) boardPolitics.innerHTML += cardHtml;
+                } else {
+                    if(boardJobs) boardJobs.innerHTML += cardHtml;
+                }
+            }
+        }
+
+        function sellInventoryWeapon(tier) {
+            if(state.inventory.weapons[tier] > 0) {
+                state.inventory.weapons[tier]--;
+                state.cash += Math.floor(weaponTiers[tier].cost * 0.5);
+                updateUI();
+            }
+        }
+        function equipInventoryWeapon(tier) {
+            let select = document.getElementById(`equip-w-${tier}`);
+            let memberId = parseInt(select.value);
+            if(isNaN(memberId)) return;
+            
+            let member = state.gang.find(m => m.id === memberId);
+            if(member && state.inventory.weapons[tier] > 0) {
+                state.inventory.weapons[tier]--;
+                if(member.weapon > 0) state.inventory.weapons[member.weapon]++; // alte Waffe zurück ins Inventar
+                member.weapon = tier;
+                updateUI();
+            }
+        }
+        function sellInventoryVehicle(tier) {
+            if(state.inventory.vehicles[tier] > 0) {
+                state.inventory.vehicles[tier]--;
+                state.cash += Math.floor(vehicleTiers[tier].cost * 0.5);
+                updateUI();
+            }
+        }
+        function equipInventoryVehicle(tier) {
+            if(state.inventory.vehicles[tier] > 0) {
+                state.inventory.vehicles[tier]--;
+                if(state.vehicleLevel > 0) state.inventory.vehicles[state.vehicleLevel]++; // aktuelles Auto ins Inventar
+                state.vehicleLevel = tier;
+                updateUI();
+            }
+        }
+
+        function updateInventoryUI() {
+            const invDiv = document.getElementById('inventory-content');
+            if(!invDiv) return;
+            let html = '';
+            
+            // Waffen
+            let hasWeapons = false;
+            let wHtml = '<h4 style="margin-top:0;">Waffenlager</h4>';
+            for(let i=1; i<state.inventory.weapons.length; i++) {
+                let count = state.inventory.weapons[i];
+                if(count > 0) {
+                    hasWeapons = true;
+                    let w = weaponTiers[i];
+                    let sellPrice = Math.floor(w.cost * 0.5);
+                    
+                    let eligibleMembers = state.gang.filter(m => m.weapon < i);
+                    let equipSelect = `<select id="equip-w-${i}" style="width:110px; padding:4px; font-size:0.85em;"><option value="">Mitglied...</option>`;
+                    eligibleMembers.forEach(m => {
+                        let shortName = m.name.length > 12 ? m.name.substring(0,10) + '..' : m.name;
+                        equipSelect += `<option value="${m.id}">${shortName}</option>`;
+                    });
+                    equipSelect += `</select>`;
+                    let equipBtn = eligibleMembers.length > 0 ? `<button class="btn-tiny" onclick="equipInventoryWeapon(${i})" style="margin-left:5px; background:var(--success);">Geben</button>` : '';
+
+                    wHtml += `<div class="slot" style="flex-direction:column; align-items:flex-start; gap:8px;">
+                        <div style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#fff; font-weight:bold;">${count}x ${w.name}</span>
+                            <button class="btn-tiny" onclick="sellInventoryWeapon(${i})" style="background:var(--warning); color:#000;">Verkaufen (+${sellPrice}$)</button>
+                        </div>
+                        <div style="display:flex; width:100%; justify-content:space-between; align-items:center;">
+                            ${eligibleMembers.length > 0 ? equipSelect + equipBtn : '<span style="color:#666; font-size:0.8em;">Keiner braucht das.</span>'}
+                        </div>
+                    </div>`;
+                }
+            }
+            if(!hasWeapons) wHtml += '<div class="slot empty">Keine Waffen eingelagert.</div>';
+            
+            // Autos
+            let hasVehicles = false;
+            let vHtml = '<h4>Garage</h4>';
+            for(let i=1; i<state.inventory.vehicles.length; i++) {
+                let count = state.inventory.vehicles[i];
+                if(count > 0) {
+                    hasVehicles = true;
+                    let v = vehicleTiers[i];
+                    let sellPrice = Math.floor(v.cost * 0.5);
+                    
+                    vHtml += `<div class="slot" style="justify-content:space-between;">
+                        <span style="color:#fff; font-weight:bold;">${count}x ${v.name}</span>
+                        <div>
+                            <button class="btn-tiny" onclick="equipInventoryVehicle(${i})" style="background:var(--success);">Nutzen</button>
+                            <button class="btn-tiny" onclick="sellInventoryVehicle(${i})" style="background:var(--warning); color:#000;">VK (+${sellPrice}$)</button>
+                        </div>
+                    </div>`;
+                }
+            }
+            if(!hasVehicles) vHtml += '<div class="slot empty">Keine Autos in der Garage.</div>';
+            
+            html = wHtml + vHtml;
+            invDiv.innerHTML = html;
+        }
+
+        function updateInvestmentsUI() {
+            const container = document.getElementById('invest-container');
+            container.innerHTML = '';
+            for (let key in state.investments) {
+                let inv = state.investments[key];
+                let cost = getInvestCost(key);
+                let isLocked = state.cash < cost ? 'locked' : '';
+                container.innerHTML += `
+                    <button class="btn-invest ${isLocked}" onclick="buyInvest('${key}')" style="margin-bottom:4px;">
+                        <span>${inv.name} (Stf. ${inv.level})<br><span style="font-size:0.8em; font-weight:normal;">+${inv.level * inv.income}$ / Woche</span></span>
+                        <span class="chance">- ${cost} $</span>
+                    </button>
+                `;
+            }
+        }
+
+        function updateInfluenceUI() {
+            let maxVal = 5000;
+            document.getElementById('ui-inf-player').innerText = state.respect;
+            document.getElementById('bar-player').style.width = Math.min(100, (state.respect/maxVal)*100) + "%";
+
+            const rContainer = document.getElementById('rivals-container');
+            rContainer.innerHTML = '';
+            state.rivals.forEach(r => {
+                if(r.active) {
+                    let pct = Math.min(100, (r.power/maxVal)*100);
+                    rContainer.innerHTML += `
+                        <div class="inf-container">
+                            <div class="inf-header"><span style="color:${r.color};">${r.name}</span> <span>${r.power}</span></div>
+                            <div class="bar-bg"><div class="bar-fill" style="width: ${pct}%; background: ${r.color};"></div></div>
+                        </div>
+                    `;
+                } else {
+                    rContainer.innerHTML += `
+                        <div class="inf-container" style="opacity:0.3;">
+                            <div class="inf-header"><span style="color:#666; text-decoration:line-through;">${r.name}</span> <span style="color:var(--success);">VERNICHTET</span></div>
+                            <div class="bar-bg"><div class="bar-fill" style="width: 0%;"></div></div>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('ui-turn').innerText = state.turn;
+            document.getElementById('ui-rank').innerText = getRank();
+            document.getElementById('ui-respect').innerText = state.respect;
+            document.getElementById('ui-cash').innerText = state.cash + " $";
+            
+            const gruntsCount = state.gang.filter(m => !m.isBoss).length;
+            document.getElementById('ui-upkeep').innerText = gruntsCount * 20;
+            document.getElementById('ui-car').innerText = vehicleTiers[state.vehicleLevel].name;
+            document.getElementById('ui-car-img').src = 'images/car_' + state.vehicleLevel + '.png';
+            
+            const heatElement = document.getElementById('ui-heat');
+            heatElement.innerText = Math.floor(state.heat) + " %";
+            if (state.heat > 75) heatElement.style.color = "var(--accent)";
+            else heatElement.style.color = "var(--warning)";
+
+            const carBtn = document.getElementById('btn-car');
+            if (state.vehicleLevel < vehicleTiers.length - 1) {
+                let nextVeh = vehicleTiers[state.vehicleLevel + 1];
+                document.getElementById('text-car').innerText = nextVeh.name;
+                document.getElementById('cost-car').innerText = "- " + nextVeh.cost + " $";
+                if(state.cash < nextVeh.cost) carBtn.classList.add('locked'); else carBtn.classList.remove('locked');
+            } else {
+                document.getElementById('text-car').innerText = "Maximaler Fuhrpark";
+                document.getElementById('cost-car').innerText = "";
+                carBtn.classList.add('locked');
+            }
+
+            const btnRecruit = document.getElementById('btn-recruit');
+            if(state.cash < 250) btnRecruit.classList.add('locked'); else btnRecruit.classList.remove('locked');
+
+            const btnBribe = document.getElementById('btn-bribe');
+            if(state.cash < 800 || state.heat === 0) btnBribe.classList.add('locked'); else btnBribe.classList.remove('locked');
+
+            document.getElementById('ui-base-def').innerText = baseDefenseTiers[state.baseDefenseLevel].name + " (" + baseDefenseTiers[state.baseDefenseLevel].bonus + "%)";
+            const defBtn = document.getElementById('btn-base-def');
+            if (state.baseDefenseLevel < baseDefenseTiers.length - 1) {
+                let nextDef = baseDefenseTiers[state.baseDefenseLevel + 1];
+                document.getElementById('text-base-def').innerText = nextDef.name;
+                document.getElementById('cost-base-def').innerText = "- " + nextDef.cost + " $";
+                if(state.cash < nextDef.cost) defBtn.classList.add('locked'); else defBtn.classList.remove('locked');
+            } else {
+                document.getElementById('text-base-def').innerText = "Maximale Sicherheit";
+                document.getElementById('cost-base-def').innerText = "";
+                defBtn.classList.add('locked');
+            }
+
+            const btnIntel = document.getElementById('btn-prep-intel');
+            if(state.bankPrep.intel || state.cash < 250) btnIntel.classList.add('locked'); else btnIntel.classList.remove('locked');
+            btnIntel.style.background = state.bankPrep.intel ? "var(--success)" : "var(--blue)";
+
+            updateInfluenceUI();
+            updateInvestmentsUI();
+            updateRoster();
+            updateMissionBoard();
+            updateInventoryUI();
+        }
+
+        function log(msg, className="log-entry") {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = "log-entry " + className;
+            entry.innerHTML = `<b>[Woche ${state.turn}]</b> ${msg}`;
+            logDiv.prepend(entry);
+        }
+
+        function gameOver(reason) {
+            document.getElementById('weekly-modal-overlay').style.display = 'none';
+            log(`💀 GAME OVER: ${reason}`, "log-danger");
+            document.getElementById('btn-execute').disabled = true;
+            document.querySelectorAll('button').forEach(b => {
+                b.disabled = true;
+                b.classList.add('locked');
+            });
+        }
+
+        function showVictory() {
+            document.getElementById('weekly-modal-overlay').style.display = 'none';
+            document.getElementById('victory-modal-overlay').style.display = 'flex';
+        }
+
+        function buyVehicle() {
+            if (state.vehicleLevel >= vehicleTiers.length - 1) return;
+            const nextVeh = vehicleTiers[state.vehicleLevel + 1];
+            if (state.cash < nextVeh.cost) return;
+            state.cash -= nextVeh.cost; 
+            if(state.vehicleLevel > 0) state.inventory.vehicles[state.vehicleLevel]++; // Altes Auto einlagern
+            state.vehicleLevel++; 
+            state.respect += 20;
+            log(`🚗 Fahrzeug gekauft: '${nextVeh.name}'. Fluchtchancen steigen!`, "log-info");
+            updateUI();
+        }
+
+        function buyBaseDefense() {
+            if (state.baseDefenseLevel >= baseDefenseTiers.length - 1) return;
+            const nextDef = baseDefenseTiers[state.baseDefenseLevel + 1];
+            if (state.cash < nextDef.cost) return;
+            state.cash -= nextDef.cost; 
+            state.baseDefenseLevel++; 
+            state.respect += 50;
+            log(`🛡️ HQ aufgerüstet: '${nextDef.name}'. Basis-Verteidigung steigt auf ${nextDef.bonus}%!`, "log-info");
+            updateUI();
+        }
+
+        function actionBribe() {
+            if (state.cash < 800 || state.heat <= 0) return;
+            state.cash -= 800; state.heat = Math.max(0, state.heat - 50);
+            log("Schmiergeld gezahlt. Akten vernichtet.", "log-info");
+            updateUI();
+        }
+
+        function buyIntel() {
+            if (state.bankPrep.intel || state.cash < 250) return;
+            state.cash -= 250; state.bankPrep.intel = true;
+            log("Wachplan gekauft (+5% bei Bankraub).", "log-info");
+            updateUI();
+        }
+
+        function actionRecruit() {
+            if (state.cash < 250) return;
+            state.cash -= 250;
+            let newName = availableNames.length > 0 ? availableNames.pop() : "Namenloser #" + (Math.floor(Math.random()*100));
+            state.memberIdCounter++;
+            let bKrf = Math.random() > 0.6 ? 1 : 0; if(Math.random()>0.9) bKrf=2;
+            let bGes = Math.random() > 0.6 ? 1 : 0; if(Math.random()>0.9) bGes=2;
+            let bInt = Math.random() > 0.6 ? 1 : 0; if(Math.random()>0.9) bInt=2;
+
+            state.gang.push({ 
+                id: state.memberIdCounter, name: newName, weapon: 0, 
+                krf: bKrf, ges: bGes, int: bInt, task: 'idle', isBoss: false
+            });
+            log(`👔 ${newName} ist der Familie beigetreten.`);
+            updateUI();
+        }
+
+        function resolveCar(idx, action) {
+            let c = state.pendingCars[idx];
+            if (!c || c.resolved) return;
+            c.resolved = true;
+            if (action === 'keep') {
+                if(state.vehicleLevel > 0) state.inventory.vehicles[state.vehicleLevel]++; // Bisheriges Auto einlagern
+                state.vehicleLevel = c.level;
+                document.getElementById(`car-item-${idx}`).innerHTML = `<div style="color:var(--success); font-weight:bold;">${c.name} behalten!</div>`;
+                document.getElementById('ui-car').innerText = vehicleTiers[state.vehicleLevel].name; 
+            } else {
+                state.cash += c.value;
+                document.getElementById(`car-item-${idx}`).innerHTML = `<div style="color:var(--success); font-weight:bold;">Verkauft für +${c.value}$</div>`;
+                document.getElementById('ui-cash').innerText = state.cash + " $"; 
+            }
+        }
+
+        function showWeeklyModal() {
+            let html = `<h3>Wochenbericht (Woche ${state.turn})</h3>`;
+            html += `<div class="modal-summary">${state.logsThisWeek.join('<br>')}</div>`;
+
+            if (state.pendingCars.length > 0) {
+                html += `<div class="modal-section"><h4>Gestohlene Fahrzeuge</h4>`;
+                state.pendingCars.forEach((c, index) => {
+                    html += `
+                    <div class="car-item" id="car-item-${index}">
+                        <div><b>${c.name}</b> (Wert: ${c.value*2}$)</div>
+                        <div>
+                            <button class="btn-tiny" onclick="resolveCar(${index}, 'keep')" style="background:var(--success); margin-bottom:5px;">Behalten</button>
+                            <button class="btn-tiny" onclick="resolveCar(${index}, 'sell')" style="background:var(--accent);">Verkaufen (+${c.value}$)</button>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            if (state.pendingArrests.length > 0) {
+                html += `<div class="modal-section"><h4>Verhaftungen (Waffen konfisziert)</h4>`;
+                state.pendingArrests.forEach((arr, index) => {
+                    let bossTag = arr.member.isBoss ? '<span class="boss-name">⭐ Du (Boss)</span>' : arr.member.name;
+                    html += `
+                    <div class="arrest-item" id="arrest-item-${index}">
+                        <div>
+                            <b>${bossTag}</b><br>
+                            <span style="font-size:0.85em; color:#aaa;">Vergehen: ${arr.crime}</span>
+                        </div>
+                        <div>
+                            <button class="btn-tiny" onclick="payBail(${index})" style="background:var(--warning); color:#000; padding:8px 12px; font-weight:bold;">Kaution zahlen (${arr.bail}$)</button>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            html += `<button class="btn-execute" onclick="closeWeeklyModal()" style="margin-top:20px; width:100%;">Woche abschließen</button>`;
+
+            document.getElementById('weekly-modal').innerHTML = html;
+            document.getElementById('weekly-modal-overlay').style.display = 'flex';
+        }
+
+        function payBail(index) {
+            let arr = state.pendingArrests[index];
+            if (!arr || arr.paid) return;
+
+            if (state.cash >= arr.bail) {
+                state.cash -= arr.bail;
+                arr.paid = true;
+                document.getElementById(`arrest-item-${index}`).innerHTML = `
+                    <div><b>${arr.member.isBoss ? '⭐ Du (Boss)' : arr.member.name}</b></div>
+                    <div style="color:var(--success); font-weight:bold;">Kaution bezahlt!</div>
+                `;
+                document.getElementById('ui-cash').innerText = state.cash + " $";
+            } else {
+                alert("Nicht genug Geld für die Kaution!");
+            }
+        }
+
+        function closeWeeklyModal() {
+            document.getElementById('weekly-modal-overlay').style.display = 'none';
+
+            let bossJailed = false;
+            let jailedNames = [];
+
+            state.pendingCars.forEach(c => {
+                if (!c.resolved) state.cash += c.value;
+            });
+
+            state.pendingArrests.forEach(arr => {
+                if (!arr.paid) {
+                    if (arr.member.isBoss) {
+                        bossJailed = true;
+                    } else {
+                        state.gang = state.gang.filter(m => m.id !== arr.member.id);
+                        jailedNames.push(arr.member.name);
+                    }
+                }
+            });
+
+            state.logsThisWeek.reverse().forEach(msg => log(msg, ""));
+
+            if (jailedNames.length > 0) {
+                log(`Keine Kaution gezahlt, sitzen im Gefängnis: ${jailedNames.join(', ')}.`, "log-warning");
+            }
+
+            if (bossJailed) {
+                gameOver("Du konntest deine eigene Kaution nicht bezahlen und wurdest zu lebenslanger Haft verurteilt! Das Syndikat zerfällt.");
+                return;
+            }
+
+            let allDead = state.rivals.every(r => !r.active);
+            if (state.respect >= 5000 && allDead) {
+                showVictory();
+                return;
+            } else if (state.respect >= 5000 && !allDead) {
+                let existingLog = state.logsThisWeek.find(l => l.includes("5000 Respekt"));
+                if (!existingLog) {
+                    log("Du hast extremen Einfluss (5000 Respekt), aber deine Rivalen leben noch! Vernichte sie für den Sieg!", "log-warning");
+                }
+            }
+
+            state.turn++;
+            state.pendingArrests = [];
+            state.pendingCars = [];
+            state.logsThisWeek = [];
+            updateUI();
+        }
+
+        function executeWeek() {
+            let assignments = {};
+            state.gang.forEach(m => {
+                if(!assignments[m.task]) assignments[m.task] = [];
+                assignments[m.task].push(m);
+            });
+
+            let invalidTasks = [];
+            for (const [taskId, squad] of Object.entries(assignments)) {
+                if (taskId === 'idle') continue;
+                const t = tasks[taskId];
+                
+                if (taskId.startsWith('train')) {
+                    if (state.cash < squad.length * 50) invalidTasks.push(`- ${t.name} (Zu wenig Geld für Training)`);
+                } else if (taskId === 'polBribe' && state.cash < 1500) {
+                    invalidTasks.push(`- ${t.name} (Benötigt 1500$)`);
+                } else if (squad.length > 0 && squad.length < t.min) {
+                    invalidTasks.push(`- ${t.name} (Min. ${t.min} Personen benötigt)`);
+                } else if (taskId === 'smuggle' && state.vehicleLevel === 0) {
+                    invalidTasks.push(`- ${t.name} (Auto wird zwingend benötigt)`);
+                } else if ((taskId === 'turfWar' || taskId === 'trap') && !state.rivals.some(r=>r.active)) {
+                    invalidTasks.push(`- ${t.name} (Keine Rivalen mehr vorhanden!)`);
+                }
+            }
+
+            if (invalidTasks.length > 0) {
+                alert("Aktion abgebrochen! Probleme mit deinem Dienstplan:\n\n" + invalidTasks.join("\n"));
+                return;
+            }
+
+            state.logsThisWeek = [];
+            state.pendingArrests = [];
+            state.pendingCars = [];
+            let pendingDeaths = [];
+            let bossDead = false;
+
+            function executeRazzia(contextMsg) {
+                let vData = vehicleTiers[state.vehicleLevel];
+                let saveMultiplier = 1 - vData.raidSave;
+                let targetCasualties = Math.floor(state.gang.length * 0.6 * saveMultiplier);
+                let lostCash = Math.floor(state.cash * 0.7 * saveMultiplier);
+
+                if (state.vehicleLevel > 0) {
+                    state.logsThisWeek.push(`<span class="log-danger">🚨 RAZZIA! ${contextMsg} Dank Fahrzeug (${vData.name}) konntet ihr etwas retten. Verlust: ${lostCash} $.</span>`);
+                } else {
+                    state.logsThisWeek.push(`<span class="log-danger">🚨 MASSIVE RAZZIA! ${contextMsg} HQ gestürmt. Verlust: ${lostCash} $.</span>`);
+                }
+                
+                state.cash = Math.max(0, state.cash - lostCash);
+                let actualLoss = 0;
+                let pool = [...state.gang].sort(() => Math.random() - 0.5);
+
+                for (let member of pool) {
+                    if (actualLoss < targetCasualties) {
+                        if (Math.random() * 100 > getSaveChance(member)) {
+                            actualLoss++;
+                            member.weapon = 0;
+                            state.pendingArrests.push({ member: member, bail: 1500, crime: "Großrazzia", paid: false });
+                        }
+                    }
+                }
+                state.heat = 0;
+            }
+
+            // --- RAZZIA CHECK: Findet VOR der eigentlichen Woche statt ---
+            if (state.heat >= 100) {
+                executeRazzia("Ihr habt die Cops nicht rechtzeitig geschmiert! Alle Jobs dieser Woche fallen ins Wasser.");
+                updateUI();
+                showWeeklyModal();
+                return; // Die restliche Woche wird NICHT ausgeführt
+            }
+            // --- ENDE RAZZIA CHECK ---
+
+            for (const [taskId, squad] of Object.entries(assignments)) {
+                if (taskId === 'idle') continue;
+                const t = tasks[taskId];
+
+                if (taskId === 'defend') continue; 
+
+                if (taskId.startsWith('train')) {
+                    const cost = squad.length * 50;
+                    state.cash -= cost;
+                    let statName = "";
+                    if(taskId === 'trainKrf') { squad.forEach(m => m.krf++); statName = "Kraft"; }
+                    if(taskId === 'trainGes') { squad.forEach(m => m.ges++); statName = "Geschick"; }
+                    if(taskId === 'trainInt') { squad.forEach(m => m.int++); statName = "Intelligenz"; }
+                    state.logsThisWeek.push(`<span class="log-info">💪 ${squad.length} Leute trainierten (${statName} +1). Kosten: -${cost}$.</span>`);
+                    continue; 
+                }
+
+                if (taskId === 'bouncer') {
+                    let earned = 0;
+                    squad.forEach(m => earned += Math.floor(Math.random() * 30) + 30 + (m.krf * 15));
+                    state.cash += earned;
+                    state.logsThisWeek.push(`🚪 Türsteher haben legitime ${earned}$ verdient.`);
+                    continue;
+                }
+
+                if (taskId === 'bankScout') {
+                    state.bankPrep.scout = true;
+                    state.logsThisWeek.push(`<span class="log-info">🔍 Bank ausgespäht (+5% Chance).</span>`);
+                    
+                    continue;
+                }
+                
+                if (taskId === 'bankPlan') {
+                    state.bankPrep.plan = true;
+                    state.logsThisWeek.push(`<span class="log-info">📝 Fluchtroute geplant (+5% Chance).</span>`);
+                    
+                    continue;
+                }
+
+                const chance = calculateTaskChance(t, squad);
+                const roll = Math.random() * 100;
+
+                if (roll < chance) {
+                    if (taskId === 'polBribe') {
+                        state.cash -= 1500;
+                        state.respect += t.respect; state.heat += t.heat;
+                        state.logsThisWeek.push(`<span class="log-success">✅ <b>${t.name} erfolgreich!</b> 1500$ gezahlt. Respekt +${t.respect}.</span>`);
+                    } else if (taskId === 'polWitness') {
+                        state.heat = Math.max(0, state.heat - 60);
+                        state.respect += t.respect;
+                        state.logsThisWeek.push(`<span class="log-success">✅ <b>${t.name} erfolgreich!</b> Fahndung massiv gesenkt (-60%). Respekt +${t.respect}.</span>`);
+                    } else if (taskId === 'carTheft') {
+                        let carRoll = Math.random();
+                        let carLvl = carRoll > 0.95 ? 3 : (carRoll > 0.65 ? 2 : 1);
+                        let sellVal = vehicleTiers[carLvl].cost * 0.5;
+                        state.pendingCars.push({ level: carLvl, name: vehicleTiers[carLvl].name, value: sellVal, resolved: false });
+                        state.respect += t.respect; state.heat += t.heat;
+                        state.logsThisWeek.push(`<span class="log-success">✅ <b>Autodiebstahl!</b> Ein ${vehicleTiers[carLvl].name} wurde entwendet.</span>`);
+                    } else if (taskId === 'turfWar') {
+                        let target = state.rivals.find(r => r.id == state.turfWarTarget && r.active);
+                        if(target) {
+                            let dmg = 100 + (squad.length * 30); 
+                            let enemyPowerBefore = target.power;
+                            target.power -= dmg;
+
+                            let baseLoot = Math.floor(Math.random() * 1500) + 1000;
+                            let powerLoot = Math.floor(enemyPowerBefore * (Math.random() * 2 + 1));
+                            let totalLoot = baseLoot + powerLoot;
+                            state.cash += totalLoot;
+                            state.heat += t.heat;
+
+                            let extraMsg = "";
+
+                            let carChance = Math.min(60, enemyPowerBefore / 20);
+                            if (Math.random() * 100 < carChance) {
+                                let carLvl = 1;
+                                if (enemyPowerBefore > 1500 && Math.random() > 0.7) carLvl = 4;
+                                else if (enemyPowerBefore > 800 && Math.random() > 0.5) carLvl = 3;
+                                else if (enemyPowerBefore > 300 && Math.random() > 0.4) carLvl = 2;
+                                
+                                let sellVal = vehicleTiers[carLvl].cost * 0.5;
+                                state.pendingCars.push({ level: carLvl, name: vehicleTiers[carLvl].name, value: sellVal, resolved: false });
+                                extraMsg += ` 🚗 Fahrzeug erbeutet!`;
+                            }
+
+                            let invChance = Math.min(50, enemyPowerBefore / 30);
+                            if (Math.random() * 100 < invChance) {
+                                let invKey = 'housing';
+                                if (enemyPowerBefore > 2000 && Math.random() > 0.8) invKey = 'industry';
+                                else if (enemyPowerBefore > 1000 && Math.random() > 0.6) invKey = 'brothel';
+                                else if (enemyPowerBefore > 400 && Math.random() > 0.5) invKey = 'shops';
+                                
+                                state.investments[invKey].level++;
+                                extraMsg += ` 🏢 ${state.investments[invKey].name} übernommen!`;
+                            }
+
+                            if(target.power <= 0) {
+                                target.active = false;
+                                state.respect += 500;
+                                state.logsThisWeek.push(`<span class="log-success">🔥 <b>${target.name} VERNICHTET!</b> Beute: ${totalLoot}$, +500 Respekt!${extraMsg}</span>`);
+                            } else {
+                                state.respect += Math.floor(enemyPowerBefore * 0.05); 
+                                state.logsThisWeek.push(`<span class="log-success">🔫 <b>Revierkampf gegen ${target.name}:</b> ${dmg} Macht abgezogen! Beute: ${totalLoot}$!${extraMsg}</span>`);
+                            }
+                        }
+                    } else if (taskId === 'trap') {
+                        let target = state.rivals.find(r => r.id == state.turfWarTarget && r.active);
+                        if(target) {
+                            let dmg = 150 + (squad.length * 50);
+                            target.power -= dmg;
+                            state.heat += t.heat;
+                            if(target.power <= 0) {
+                                target.active = false;
+                                state.logsThisWeek.push(`<span class="log-success">💥 <b>Sprengstofffalle!</b> ${target.name} wurde komplett zerschlagen!</span>`);
+                            } else {
+                                state.logsThisWeek.push(`<span class="log-success">💥 <b>Sprengstofffalle!</b> ${dmg} Macht von ${target.name} weggebombt!</span>`);
+                            }
+                        }
+                    } else {
+                        let loot = Math.floor(Math.random() * (t.loot[1] - t.loot[0])) + t.loot[0];
+                        state.cash += loot; state.respect += t.respect; state.heat += t.heat;
+                        state.logsThisWeek.push(`<span class="log-success">✅ <b>${t.name} erfolgreich!</b> Beute: ${loot}$. Respekt +${t.respect}.</span>`);
+                    }
+                    
+                    if(taskId === 'bank') {
+                        state.bankPrep.scout = false; state.bankPrep.plan = false; state.bankPrep.intel = false; 
+                    }
+                } else {
+                    if (taskId === 'polBribe') state.cash -= 1500;
+                    
+                    let casualtiesThisTask = 0;
+                    squad.forEach(m => {
+                        if (Math.random() * 100 > getSaveChance(m)) {
+                            casualtiesThisTask++;
+                            if (taskId === 'turfWar') {
+                                if (m.isBoss) bossDead = true;
+                                pendingDeaths.push(m);
+                            } else {
+                                m.weapon = 0; 
+                                state.pendingArrests.push({ member: m, bail: t.bail, crime: t.name, paid: false });
+                            }
+                        }
+                    });
+
+                    let msg = `<span class="log-danger">❌ <b>${t.name} gescheitert!</b>`;
+                    if (taskId === 'turfWar' && casualtiesThisTask > 0) {
+                        msg += ` ${casualtiesThisTask} Männer fielen im Kugelhagel!`;
+                    } else if (casualtiesThisTask > 0) {
+                        msg += ` ${casualtiesThisTask} Leute wurden geschnappt!`;
+                    } else {
+                        msg += ` Alle konnten entkommen.`;
+                    }
+                    msg += `</span>`;
+                    state.logsThisWeek.push(msg);
+                    
+                    if (taskId === 'polWitness') {
+                        state.heat = 100;
+                        executeRazzia("Die Beseitigung der Zeugen ist katastrophal gescheitert! Die Cops schlagen sofort zurück!");
+                    } else {
+                        state.heat += (t.heat * 2); 
+                    }
+                    
+                    if(taskId === 'bank') {
+                        state.bankPrep.scout = false; state.bankPrep.plan = false; state.bankPrep.intel = false; 
+                    }
+                }
+                
+                }
+
+            pendingDeaths.forEach(d => { state.gang = state.gang.filter(m => m.id !== d.id); });
+            if (bossDead) { gameOver("Du wurdest im Revierkampf erschossen! Das Syndikat fällt in sich zusammen."); return; }
+
+            let activeRivals = state.rivals.filter(r => r.active);
+            if(activeRivals.length > 0) {
+                activeRivals.forEach(r => r.power += Math.floor(Math.random() * 10) + Math.floor(state.turn/2));
+                
+                let attackChance = (state.respect / 5000) * 40 + 5; 
+                if(Math.random() * 100 < attackChance) {
+                    let attacker = activeRivals[Math.floor(Math.random() * activeRivals.length)];
+                    
+                    let defenders = state.gang.filter(m => m.task === 'defend' && !state.pendingArrests.some(a=>a.member.id===m.id));
+                    let defPower = 0;
+                    defenders.forEach(m => { 
+                        defPower += (weaponTiers[m.weapon].bonus * 0.5) + (m.krf*2) + (m.ges*1.5) + (m.int*0.5); 
+                    });
+                    
+                    let hqBonus = baseDefenseTiers[state.baseDefenseLevel].bonus;
+                    let totalDef = defPower + hqBonus;
+                    
+                    let rawEnemyChance = 50 + ((attacker.power - state.respect) / 10);
+                    // Wir deckeln die Grundchance der Angreifer auf max. 95%, BEVOR die Verteidigung abgezogen wird.
+                    // So wird die Verteidigung nicht durch extrem hohe feindliche Macht nutzlos.
+                    rawEnemyChance = Math.max(5, Math.min(95, rawEnemyChance));
+                    
+                    let enemyChance = rawEnemyChance - totalDef;
+                    enemyChance = Math.max(5, Math.min(95, enemyChance));
+                    
+                    let defString = `${defenders.length} Wachen (und Stufe ${state.baseDefenseLevel} HQ)`;
+                    let chanceString = `${Math.floor(enemyChance)}% (Basis: ${Math.floor(rawEnemyChance)}% - ${Math.floor(totalDef)}% Def)`;
+                    
+                    if(Math.random() * 100 >= enemyChance) {
+                        state.logsThisWeek.push(`<span class="log-info">🛡️ <b>Verteidigt!</b> ${defString} haben einen Angriff von ${attacker.name} abgewehrt! Feind-Chance: ${chanceString}</span>`);
+                        attacker.power = Math.max(0, attacker.power - 30);
+                    } else {
+                        let cashLost = Math.floor(state.cash * 0.2);
+                        state.cash -= cashLost;
+                        state.respect = Math.max(0, state.respect - 100);
+                        state.logsThisWeek.push(`<span class="log-danger">💥 <b>Überfall!</b> ${attacker.name} hat eure Basis überrannt! Verlust: ${cashLost}$ / 100 Respekt. Feind-Chance: ${chanceString}</span>`);
+                        
+                        let casualtyPool = defenders.length > 0 ? defenders : state.gang.filter(m => !state.pendingArrests.some(a=>a.member.id===m.id));
+                        if(casualtyPool.length > 0 && Math.random() > 0.5) {
+                            let victim = casualtyPool[Math.floor(Math.random()*casualtyPool.length)];
+                            if(victim.isBoss) {
+                                if (state.respect <= 0) {
+                                    bossDead = true;
+                                } else {
+                                    state.logsThisWeek.push(`<span class="log-warning">⚠️ Du wurdest im Hauptquartier attackiert, konntest dank deines Rests an Einfluss aber in Sicherheit gebracht werden!</span>`);
+                                }
+                            } else {
+                                state.gang = state.gang.filter(m => m.id !== victim.id);
+                                state.logsThisWeek.push(`<span class="log-danger">💀 ${victim.name} fiel bei dem Angriff.</span>`);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (bossDead) { gameOver("Dein Hauptquartier wurde überrannt und du wurdest im Feuergefecht getötet."); return; }
+
+            if(state.heat > 0) state.heat = Math.max(0, state.heat - 3); 
+            
+            let passiveIncome = 0;
+            for(let k in state.investments) passiveIncome += state.investments[k].level * state.investments[k].income;
+            state.cash += passiveIncome;
+            if(passiveIncome > 0) state.logsThisWeek.push(`🏢 Investitionen brachten +${passiveIncome}$ ein.`);
+
+            const grunts = state.gang.filter(m => !m.isBoss && !state.pendingArrests.some(a => a.member.id === m.id));
+            const upkeep = grunts.length * 20;
+            state.cash -= upkeep;
+            
+            if (state.cash < 0) {
+                let leaving = Math.ceil(Math.abs(state.cash) / 20);
+                if (leaving > grunts.length) leaving = grunts.length;
+                
+                grunts.sort((a,b) => a.weapon - b.weapon); 
+                let leftNames = [];
+                for(let i=0; i<leaving; i++) {
+                    let leavingGrunt = grunts.shift();
+                    leftNames.push(leavingGrunt.name);
+                    state.gang = state.gang.filter(m => m.id !== leavingGrunt.id);
+                }
+                state.cash = 0;
+                state.logsThisWeek.push(`<span class="log-danger">💸 BANKROTT! ${leaving} Schläger (${leftNames.join(', ')}) haben dich wegen fehlendem Lohn verlassen!</span>`);
+            }
+
+            if(state.logsThisWeek.length === 0) state.logsThisWeek.push("Die Woche verstrich ereignislos.");
+
+            if (state.heat >= 100) {
+                state.logsThisWeek.push(`<span class="log-warning" style="font-size: 1.05em; color: var(--warning); border: 1px dashed var(--warning); padding: 5px; display: block; margin-top: 10px;">⚠️ ACHTUNG: Die Fahndung hat ${Math.floor(state.heat)}% erreicht! Schmiere nächste Woche VOR dem Einsatz die Polizei, sonst droht eine sofortige Razzia!</span>`);
+            }
+
+            updateUI(); 
+            showWeeklyModal();
+        }
+    </script>
+</body>
+</html>
